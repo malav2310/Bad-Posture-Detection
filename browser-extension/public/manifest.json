@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Posture Detective",
+  "version": "1.0.0",
+  "description": "AI-powered posture detection to keep your spine happy",
+  "permissions": [
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
