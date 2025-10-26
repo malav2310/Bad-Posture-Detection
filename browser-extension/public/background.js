@@ -39,10 +39,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
+    case 'startMonitoring':
+      handleStartMonitoring()
+        .then(() => sendResponse({ success: true }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'stopMonitoring':
+      handleStopMonitoring()
+        .then(() => sendResponse({ success: true }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
     default:
       console.warn('Unknown message type:', message.type);
   }
 });
+
+async function handleStartMonitoring() {
+  try {
+    console.log('Sending startMonitoring message to offscreen document');
+    await chrome.runtime.sendMessage({ type: 'startMonitoring' });
+  } catch (error) {
+    console.error('Error in handleStartMonitoring:', error);
+    throw error;
+  }
+}
 
 // ✅ Create or confirm offscreen document
 async function handleCreateOffscreen() {

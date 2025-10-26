@@ -7,10 +7,8 @@ export default defineConfig({
     outDir: 'dist',
     rollupOptions: {
       input: {
-        popup: resolve(__dirname, 'index.html'), // your React popup
-        background: resolve(__dirname, 'src/background.js'),
-        content: resolve(__dirname, 'src/content.js'),
-        offscreen: resolve(__dirname, 'src/offscreen.html'),
+        popup: resolve(__dirname, 'index.html'), 
+        offscreen: resolve(__dirname, 'offscreen.html'),
       },
       output: {
         // Keep names stable for Chrome to find them

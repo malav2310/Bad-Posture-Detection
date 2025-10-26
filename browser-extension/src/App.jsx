@@ -1,8 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CameraOff, Play, Pause, Sun, Moon, Video, VideoOff } from 'lucide-react';
-import * as tf from '@tensorflow/tfjs';
-import * as poseDetection from '@tensorflow-models/pose-detection';
-import '@tensorflow/tfjs-backend-webgl';
 
 export default function PostureDetector() {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -33,8 +30,6 @@ useEffect(() => {
 
   loadCameraState();
 }, []);
-
-
 
 
 
@@ -105,97 +100,23 @@ useEffect(() => {
 
   const toggleCamera = () => setShowCamera(!showCamera);
 
-  const toggleMonitoring = () => {
-    if (!detectorRef.current) {
-      setStatusMessage('Model not ready yet...');
-      return;
-    }
-    if (!showCamera || !cameraReady) {
-      setStatusMessage('Please enable camera first');
-      return;
-    }
-
-    const newState = !isMonitoring;
-    setIsMonitoring(newState);
-    setStatusMessage(newState ? 'Monitoring Active' : 'Monitoring Paused');
-
-    if (!newState) {
-      cancelAnimationFrame(animationRef.current);
+  const toggleMonitoring = async () => {
+    if (isMonitoring) {
+      chrome.runtime.sendMessage({ type: 'stopMonitoring' });
+      setIsMonitoring(false);
+      setStatusMessage('Camera Active');
     } else {
-      startDetection();
+      const response = await chrome.runtime.sendMessage({ type: 'startMonitoring' });
+      if (response.success) {
+        setIsMonitoring(true);
+        setStatusMessage('Monitoring Active');
+      } else {
+        setStatusMessage('Failed to start monitoring');
+      }
     }
   };
 
-  const startDetection = async () => {
-    const detector = detectorRef.current;
-    const iframe = iframeRef.current;
-    const canvas = canvasRef.current;
-
-    if (!detector || !iframe || !canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const drawFrame = async () => {
-      if (!isMonitoring || !showCamera || !cameraReady) {
-        animationRef.current = requestAnimationFrame(drawFrame);
-        return;
-      }
-
-      try {
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-        const video = iframeDoc.getElementById('cameraStream');
-        if (!video || video.readyState < 2) {
-          animationRef.current = requestAnimationFrame(drawFrame);
-          return;
-        }
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-
-        const poses = await detector.estimatePoses(video);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        if (poses.length > 0) drawPose(ctx, poses[0]);
-      } catch (error) {
-        console.error('Pose detection error:', error);
-      }
-
-      animationRef.current = requestAnimationFrame(drawFrame);
-    };
-
-    cancelAnimationFrame(animationRef.current);
-    animationRef.current = requestAnimationFrame(drawFrame);
-  };
-
-  const drawPose = (ctx, pose) => {
-    if (!pose.keypoints) return;
-
-    ctx.fillStyle = 'rgb(0,255,0)';
-    ctx.strokeStyle = 'rgb(255,255,255)';
-    ctx.lineWidth = 2;
-
-    pose.keypoints.forEach(kp => {
-      if (kp.score > 0.4) {
-        ctx.beginPath();
-        ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
-        ctx.fill();
-      }
-    });
-
-    const adjacentPairs = poseDetection.util.getAdjacentPairs(poseDetection.SupportedModels.MoveNet);
-    ctx.strokeStyle = 'rgb(0,255,255)';
-    adjacentPairs.forEach(([i, j]) => {
-      const kp1 = pose.keypoints[i];
-      const kp2 = pose.keypoints[j];
-      if (kp1.score > 0.4 && kp2.score > 0.4) {
-        ctx.beginPath();
-        ctx.moveTo(kp1.x, kp1.y);
-        ctx.lineTo(kp2.x, kp2.y);
-        ctx.stroke();
-      }
-    });
-  };
+  
 
   const bgClass = darkMode
     ? 'bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900'

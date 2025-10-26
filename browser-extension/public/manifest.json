@@ -9,7 +9,7 @@
   },
   "background": {
     "service_worker": "background.js",
-    "persistent": true
+    "type": "module"
   },
   "web_accessible_resources": [
     {
@@ -17,6 +17,9 @@
       "matches": ["<all_urls>"]
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
   "icons": {
     "16": "icon16.png",
     "48": "icon48.png",
