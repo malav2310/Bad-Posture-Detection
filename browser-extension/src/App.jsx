@@ -1,218 +1,205 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { CameraOff, Play, Pause, Sun, Moon, Video, VideoOff } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Camera, Activity, Settings, Clock, TrendingUp, Eye } from 'lucide-react';
 
-export default function PostureDetector() {
+export default function App() {
   const [isMonitoring, setIsMonitoring] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
-  const [statusMessage, setStatusMessage] = useState('Initializing...');
-  const [cameraReady, setCameraReady] = useState(false);
-  const [offscreenReady, setOffscreenReady] = useState(false);
-  const iframeRef = useRef(null);
-  const canvasRef = useRef(null);
-  const detectorRef = useRef(null);
-  const animationRef = useRef(null);
+  const [stats, setStats] = useState({
+    sessionTime: 0,
+    alerts: 0,
+    goodPosture: 0
+  });
 
- 
-
-useEffect(() => {
-  async function loadCameraState() {
-    try {
-      const result = await chrome.storage.local.get(['cameraActive']);
-      const isActive = result.cameraActive || false;
-      setCameraReady(isActive);
-      setShowCamera(isActive);
-      setStatusMessage(isActive ? 'Camera Active' : 'Model ready');
-    } catch {
-      setStatusMessage('Unable to fetch camera status');
-    }
-  }
-
-  loadCameraState();
-}, []);
-
-
-
-  // ✅ Initialize MoveNet + backend
+  // Load saved state when popup opens
   useEffect(() => {
-    async function initModel() {
-      try {
-        await tf.setBackend('webgl').catch(() => tf.setBackend('cpu'));
-        await tf.ready();
-        console.log('TensorFlow.js backend:', tf.getBackend());
-        const detector = await poseDetection.createDetector(
-          poseDetection.SupportedModels.MoveNet,
-          { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
-        );
-        detectorRef.current = detector;
-        setStatusMessage('Model ready');
-      } catch (error) {
-        console.error('Failed to initialize model:', error);
-        setStatusMessage('Model initialization failed');
+    chrome.storage.local.get(['monitoring-state', 'monitoring-tab'], (result) => {
+      const monitoringState = result['monitoring-state'];
+      if (monitoringState) {
+        const state = JSON.parse(monitoringState);
+        setIsMonitoring(state.isMonitoring);
+        setStats(state.stats);
       }
-    }
-    console.log('Loading model...');
-    initModel();
-    return () => cancelAnimationFrame(animationRef.current);
+    });
   }, []);
 
-  // ✅ Handle camera actions
+  // Listen for state updates from other contexts (monitoring.js)
   useEffect(() => {
-    async function handleCamera() {
-      if (showCamera) {
-        try {
-          if (!offscreenReady) {
-            setStatusMessage('Creating offscreen document...');
-            await chrome.runtime.sendMessage({ type: 'createOffscreen' });
-            setOffscreenReady(true);
-            console.log('Offscreen document created');
-          }
-
-          setStatusMessage('Starting camera...');
-          await chrome.runtime.sendMessage({ type: 'startCamera' });
-          setCameraReady(true);
-          setStatusMessage('Camera Active');
-          console.log('Camera started');
-        } catch (error) {
-          console.error('Failed to setup camera:', error);
-          setStatusMessage('Camera setup failed');
-          setShowCamera(false);
-          setCameraReady(false);
+    const handleChange = (changes, areaName) => {
+      if (areaName === 'local' && changes['monitoring-state']) {
+        const newValue = changes['monitoring-state'].newValue;
+        if (newValue) {
+          const state = JSON.parse(newValue);
+          setIsMonitoring(state.isMonitoring);
+          setStats(state.stats);
+        } else {
+          setIsMonitoring(false);
+          setStats({ sessionTime: 0, alerts: 0, goodPosture: 0 });
         }
-      } else {
-        if (offscreenReady && typeof chrome !== 'undefined' && chrome.runtime) {
-          try {
-            await chrome.runtime.sendMessage({ type: 'stopCamera' });
-            console.log('Camera stopped');
-          } catch (error) {
-            console.error('Failed to stop camera:', error);
-          }
-        }
-        setCameraReady(false);
-        setIsMonitoring(false);
-        cancelAnimationFrame(animationRef.current);
-        setStatusMessage('Model ready');
       }
-    }
+    };
+    chrome.storage.onChanged.addListener(handleChange);
+    return () => chrome.storage.onChanged.removeListener(handleChange);
+  }, []);
 
-    handleCamera();
-  }, [showCamera]);
-
-  const toggleCamera = () => setShowCamera(!showCamera);
-
-  const toggleMonitoring = async () => {
+  // Update session time locally while active
+  useEffect(() => {
+    let interval;
     if (isMonitoring) {
-      chrome.runtime.sendMessage({ type: 'stopMonitoring' });
-      setIsMonitoring(false);
-      setStatusMessage('Camera Active');
+      interval = setInterval(() => {
+        setStats((prev) => ({
+          ...prev,
+          sessionTime: prev.sessionTime + 1
+        }));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isMonitoring]);
+
+  // Format HH:MM:SS
+  const formatTime = (seconds) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hrs.toString().padStart(2, '0')}:${mins
+      .toString()
+      .padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Toggle monitoring
+  const toggleMonitoring = async () => {
+    if (!isMonitoring) {
+      // Start monitoring: open new tab and save tab ID
+      const newState = {
+        isMonitoring: true,
+        stats: { sessionTime: 0, alerts: 0, goodPosture: 0 }
+      };
+      await chrome.storage.local.set({
+        'monitoring-state': JSON.stringify(newState)
+      });
+
+      chrome.tabs.create({ url: 'monitoring.html' }, async (tab) => {
+        await chrome.storage.local.set({ 'monitoring-tab': tab.id });
+      });
+
+      setIsMonitoring(true);
+      setStats(newState.stats);
     } else {
-      const response = await chrome.runtime.sendMessage({ type: 'startMonitoring' });
-      if (response.success) {
-        setIsMonitoring(true);
-        setStatusMessage('Monitoring Active');
-      } else {
-        setStatusMessage('Failed to start monitoring');
-      }
+      // Stop monitoring: close tab and clear state
+      chrome.storage.local.get('monitoring-tab', async (result) => {
+        const tabId = result['monitoring-tab'];
+        if (tabId) {
+          try {
+            await chrome.tabs.remove(tabId);
+          } catch (err) {
+            console.log('Tab already closed or not found');
+          }
+        }
+        await chrome.storage.local.remove(['monitoring-state', 'monitoring-tab']);
+        setIsMonitoring(false);
+        setStats({ sessionTime: 0, alerts: 0, goodPosture: 0 });
+      });
     }
   };
 
-  
-
-  const bgClass = darkMode
-    ? 'bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900'
-    : 'bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50';
-
-  const cardClass = darkMode
-    ? 'bg-white/10 backdrop-blur-lg border border-white/20'
-    : 'bg-white/70 backdrop-blur-lg border border-white/40';
-
-  const textClass = darkMode ? 'text-white' : 'text-gray-900';
-  const subtextClass = darkMode ? 'text-gray-300' : 'text-gray-600';
-
   return (
-    <div className={`min-h-screen ${bgClass} transition-colors duration-500 p-6`} style={{ width: '450px' }}>
-      <div className="w-full mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className={`text-3xl font-bold ${textClass} mb-1`}>Posture Detective</h1>
-            <p className={subtextClass}>Keep your spine happy 🦴</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <Activity className="w-10 h-10 text-purple-400" />
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+              Posture Monitor
+            </h1>
           </div>
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className={`p-3 rounded-full ${cardClass} hover:scale-110 transition-transform duration-200`}
-          >
-            {darkMode ? <Sun className="w-5 h-5 text-yellow-300" /> : <Moon className="w-5 h-5 text-purple-600" />}
-          </button>
+          <p className="text-slate-300">
+            AI-powered posture tracking to keep you healthy and productive
+          </p>
         </div>
 
-        <div className={`${cardClass} rounded-3xl p-6 mb-6 shadow-2xl`}>
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${isMonitoring ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`} />
-              <span className={`font-medium ${textClass}`}>{statusMessage}</span>
-            </div>
-          </div>
-          <button
-            onClick={toggleMonitoring}
-            disabled={!showCamera || !cameraReady}
-            className={`w-full py-4 rounded-2xl font-semibold text-white transition-all duration-300 transform hover:scale-105 ${
-              isMonitoring
-                ? 'bg-gradient-to-r from-red-500 to-pink-500'
-                : 'bg-gradient-to-r from-green-500 to-emerald-500'
-            } ${!showCamera || !cameraReady ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <div className="flex items-center justify-center gap-2">
+        {/* Main Control */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-6 mb-6 border border-white/20 shadow-2xl">
+          <div className="flex flex-col items-center gap-4">
+            <div
+              className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ${
+                isMonitoring
+                  ? 'bg-gradient-to-br from-green-400 to-emerald-600 shadow-lg shadow-green-500/50'
+                  : 'bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg shadow-purple-500/50'
+              }`}
+            >
               {isMonitoring ? (
-                <>
-                  <Pause className="w-5 h-5" /> Stop Monitoring
-                </>
+                <Eye className="w-10 h-10 animate-pulse" />
               ) : (
-                <>
-                  <Play className="w-5 h-5" /> Start Monitoring
-                </>
+                <Camera className="w-10 h-10" />
               )}
             </div>
-          </button>
-        </div>
 
-        <div className={`${cardClass} rounded-3xl p-6 shadow-2xl`}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className={`text-lg font-semibold ${textClass}`}>Camera Feed</h2>
+            <div className="text-center">
+              <h2 className="text-xl font-semibold mb-1">
+                {isMonitoring ? 'Monitoring Active' : 'Ready to Start'}
+              </h2>
+              <p className="text-slate-300 text-sm">
+                {isMonitoring
+                  ? 'Your posture is being tracked in real-time'
+                  : 'Click below to begin monitoring your posture'}
+              </p>
+            </div>
+
             <button
-              onClick={toggleCamera}
-              className={`p-2 rounded-xl ${
-                showCamera ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
-              } hover:scale-110 transition-transform duration-200`}
+              onClick={toggleMonitoring}
+              className={`px-10 py-3 rounded-full font-semibold transition-all duration-300 transform hover:scale-105 ${
+                isMonitoring
+                  ? 'bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 shadow-lg shadow-red-500/50'
+                  : 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 shadow-lg shadow-purple-500/50'
+              }`}
             >
-              {showCamera ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+              {isMonitoring ? 'Stop Monitoring' : 'Start Monitoring'}
             </button>
           </div>
+        </div>
 
-          <div className="relative rounded-2xl overflow-hidden bg-gray-900/50 aspect-video flex items-center justify-center">
-            {showCamera ? (
-              <div className="relative w-full h-full">
-                <iframe
-                  ref={iframeRef}
-                  src={typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime.getURL('offscreen.html') : ''}
-                  className="w-full h-full border-none"
-                  title="Camera Stream"
-                />
-                <canvas
-                  ref={canvasRef}
-                  className="absolute top-0 left-0 w-full h-full pointer-events-none"
-                />
-              </div>
-            ) : (
-              <div className="text-center">
-                <CameraOff className={`w-12 h-12 ${subtextClass} mx-auto mb-2 opacity-50`} />
-                <p className={`${subtextClass} text-sm`}>Camera preview disabled</p>
-              </div>
-            )}
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-4 border border-white/20">
+            <div className="flex items-center gap-3 mb-2">
+              <Clock className="w-5 h-5 text-blue-400" />
+              <h3 className="font-semibold text-slate-200">Session Time</h3>
+            </div>
+            <p className="text-2xl font-bold text-blue-400">
+              {formatTime(stats.sessionTime)}
+            </p>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-4 border border-white/20">
+            <div className="flex items-center gap-3 mb-2">
+              <Activity className="w-5 h-5 text-orange-400" />
+              <h3 className="font-semibold text-slate-200">Posture Alerts</h3>
+            </div>
+            <p className="text-2xl font-bold text-orange-400">{stats.alerts}</p>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-4 border border-white/20">
+            <div className="flex items-center gap-3 mb-2">
+              <TrendingUp className="w-5 h-5 text-green-400" />
+              <h3 className="font-semibold text-slate-200">Good Posture</h3>
+            </div>
+            <p className="text-2xl font-bold text-green-400">
+              {stats.goodPosture}%
+            </p>
           </div>
         </div>
 
-        <div className="mt-6 text-center">
-          <p className={`text-sm ${subtextClass} opacity-70`}>AI-powered posture detection active ⚡</p>
+        {/* Info */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+          <div className="flex items-center gap-3 mb-4">
+            <Settings className="w-6 h-6 text-purple-400" />
+            <h3 className="text-xl font-semibold">How It Works</h3>
+          </div>
+          <div className="space-y-3 text-slate-300">
+            <p>• Click "Start Monitoring" to open the camera in a new window</p>
+            <p>• The AI will analyze your posture in real-time using your webcam</p>
+            <p>• Get instant alerts when poor posture is detected</p>
+            <p>• Track your progress with detailed statistics</p>
+          </div>
         </div>
       </div>
     </div>

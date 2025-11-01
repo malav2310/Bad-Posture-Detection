@@ -8,7 +8,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         popup: resolve(__dirname, 'index.html'), 
-        offscreen: resolve(__dirname, 'offscreen.html'),
+        monitoring: resolve(__dirname, 'monitoring.html'),
       },
       output: {
         // Keep names stable for Chrome to find them
