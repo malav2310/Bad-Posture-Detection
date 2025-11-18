@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Posture Monitoring</title>
+  <title>Posture Monitor</title>
   <style>
     * {
       margin: 0;
@@ -12,60 +12,103 @@
     }
     
     body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0e27;
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: white;
       padding: 20px;
+      position: relative;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.15), transparent 50%),
+                  radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.15), transparent 50%),
+                  radial-gradient(circle at 40% 20%, rgba(168, 85, 247, 0.15), transparent 50%);
+      animation: float 20s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      33% { transform: translate(30px, -30px) rotate(5deg); }
+      66% { transform: translate(-20px, 20px) rotate(-5deg); }
     }
     
     .container {
-      max-width: 900px;
+      max-width: 1200px;
       width: 100%;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
     }
     
-    h1 {
+    header {
       text-align: center;
       margin-bottom: 30px;
+    }
+
+    h1 {
       font-size: 2.5rem;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+      font-weight: 800;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+      letter-spacing: -1px;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 968px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
     }
     
+    .card {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
     .video-container {
       position: relative;
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 20px;
-      overflow: hidden;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-      margin-bottom: 20px;
+      background: rgba(0, 0, 0, 0.4);
+      aspect-ratio: 16/9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      max-height: 500px;
     }
     
     video {
       width: 100%;
-      height: auto;
+      height: 100%;
+      object-fit: cover;
       display: block;
-    }
-    
-    .status {
-      text-align: center;
-      padding: 15px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 15px;
-      font-size: 1.1rem;
-      margin-bottom: 20px;
-    }
-    
-    .status.active {
-      background: rgba(16, 185, 129, 0.3);
-    }
-    
-    .status.error {
-      background: rgba(239, 68, 68, 0.3);
     }
     
     canvas {
@@ -74,44 +117,252 @@
       left: 0;
       width: 100%;
       height: 100%;
+      pointer-events: none;
     }
-    
-    .controls {
+
+    .sidebar {
       display: flex;
-      gap: 10px;
-      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
     }
-    
-    button {
-      padding: 12px 30px;
-      font-size: 1rem;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
+
+    .posture-status {
+      padding: 25px;
+      text-align: center;
+      border-radius: 20px;
+      transition: all 0.3s ease;
+    }
+
+    .posture-status .icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .posture-status .label {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .posture-status .details {
+      font-size: 0.9rem;
+      opacity: 0.9;
+      line-height: 1.4;
+    }
+
+    .posture-status.good {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.2));
+      border: 2px solid rgba(16, 185, 129, 0.3);
+      color: #10b981;
+    }
+
+    .posture-status.bad {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2));
+      border: 2px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
+
+    .posture-status.warning {
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.2));
+      border: 2px solid rgba(251, 191, 36, 0.3);
+      color: #fbbf24;
+    }
+
+    .status-card {
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .status-card .title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #94a3b8;
+      margin-bottom: 10px;
       font-weight: 600;
-      transition: all 0.3s;
-      background: rgba(255, 255, 255, 0.9);
-      color: #667eea;
     }
-    
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+
+    .status-card .content {
+      color: white;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-card .indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+
+    .status-card .indicator.active {
+      background: #10b981;
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+    }
+
+    .status-card .indicator.error {
+      background: #ef4444;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.85); }
+    }
+
+    .tips-card {
+      padding: 20px;
+    }
+
+    .tips-card .title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tips-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tips-list li {
+      color: #cbd5e1;
+      font-size: 0.85rem;
+      padding-left: 20px;
+      position: relative;
+      line-height: 1.4;
+    }
+
+    .tips-list li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: #667eea;
+      font-weight: 700;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 15px;
+      margin-bottom: 40px;
+    }
+
+    .stat-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 2rem;
+      }
+
+      .subtitle {
+        font-size: 0.9rem;
+      }
+
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .video-container {
+        max-height: 400px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>📹 Posture Monitoring</h1>
-    
-    <div class="status" id="status">
-      Initializing camera...
+    <header>
+      <h1>✨ Posture Monitor</h1>
+    </header>
+
+    <div class="main-grid">
+      <div class="card">
+        <div class="video-container">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="canvas"></canvas>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="posture-status warning" id="postureStatus">
+          <span class="icon">⏳</span>
+          <div class="label">Initializing...</div>
+          <div class="details">Setting up AI model</div>
+        </div>
+
+        <div class="card status-card">
+          <div class="title">System Status</div>
+          <div class="content">
+            <span class="indicator active"></span>
+            <span id="status">Loading...</span>
+          </div>
+        </div>
+
+        <div class="card tips-card">
+          <div class="title">
+            💡 Posture Tips
+          </div>
+          <ul class="tips-list">
+            <li>Keep your head aligned over shoulders</li>
+            <li>Avoid leaning forward toward screen</li>
+            <li>Maintain neutral spine position</li>
+            <li>Position monitor at eye level</li>
+            <li>Take breaks every 20-30 minutes</li>
+          </ul>
+        </div>
+      </div>
     </div>
-    
-    <div class="video-container">
-      <video id="video" autoplay playsinline></video>
-      <canvas id="canvas"></canvas>
+
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="stat-value" id="sessionTime">0:00</div>
+        <div class="stat-label">Session Time</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="goodPostureTime">0%</div>
+        <div class="stat-label">Good Posture</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="alertCount">0</div>
+        <div class="stat-label">Corrections</div>
+      </div>
     </div>
+  </div>
 
   <script type="module" src="monitoring.js"></script>
 </body>

@@ -3,7 +3,7 @@
   "name": "Posture Detective",
   "version": "1.0.0",
   "description": "AI-powered posture detection to keep your spine happy",
-  "permissions": ["sidePanel", "activeTab", "scripting", "offscreen", "storage"],
+  "permissions": ["sidePanel", "activeTab", "scripting", "offscreen", "storage", "tabs"],
   "side_panel": {
     "default_path": "index.html"
   },
@@ -11,9 +11,16 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "web_accessible_resources": [
     {
-      "resources": ["offscreen.html", "offscreen.js"],
+      "resources": ["monitoring.js", "monitoring.html"],
       "matches": ["<all_urls>"]
     }
   ],
