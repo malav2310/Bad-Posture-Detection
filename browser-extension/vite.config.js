@@ -11,6 +11,7 @@ export default defineConfig({
         monitoring: resolve(__dirname, 'monitoring.html'),
         content: resolve(__dirname, 'content.js'),
         background: resolve(__dirname, 'background.js'),
+        dashboard: resolve(__dirname, 'dashboard.html'),
       },
       output: {
         entryFileNames: (chunk) => {

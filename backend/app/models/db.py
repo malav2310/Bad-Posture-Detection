@@ -1,21 +1,27 @@
+# app/models/mydb.py
+from flask import current_app
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import os
 
+# These are just placeholders — never use them directly
 client = None
 db = None
-posture_collection = None
-sessions_collection = None
 
 def init_db(app):
-    global client, db, posture_collection, sessions_collection
-
+    """Call this from create_app() — MUST be done before importing routes"""
     load_dotenv()
     MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+    
+    app.mongodb_client = MongoClient(MONGO_URI)
+    app.db = app.mongodb_client["posture_monitoring"]
+    
+    # Optional: test connection
+    app.db.command("ping")
+    print("MongoDB connected successfully")
 
-    client = MongoClient(MONGO_URI)
-    db = client["posture_monitoring"]
-    posture_collection = db["posture_logs"]
-    sessions_collection = db["sessions"]
+def get_posture_collection():
+    return current_app.db["posture_logs"]
 
-    print("✅ MongoDB connected:", MONGO_URI)
+def get_sessions_collection():
+    return current_app.db["sessions"]

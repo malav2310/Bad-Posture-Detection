@@ -20,7 +20,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["monitoring.js", "monitoring.html"],
+      "resources": ["monitoring.js", "monitoring.html", "dashboard.html", "dashboard.js", "assets/*"],
       "matches": ["<all_urls>"]
     }
   ],

@@ -1,15 +1,27 @@
+# app/routes/session_routes.py
 from flask import Blueprint, request, jsonify
 from datetime import datetime
-from app.models.db import sessions_collection
+from app.models.db import get_sessions_collection
+from bson import ObjectId
 
 session_bp = Blueprint("session", __name__)
+
+def to_obj_id(id_str):
+    """Safely convert string to ObjectId"""
+    try:
+        return ObjectId(id_str)
+    except:
+        return None
+
 
 @session_bp.route("/start", methods=["POST"])
 def start_session():
     try:
-        data = request.json
+        data = request.get_json() or {}
+        user_id = data.get("user_id", "user_001")  # default to your test user
+
         session = {
-            "user_id": data.get("user_id", "anonymous"),
+            "user_id": user_id,
             "start_time": datetime.utcnow(),
             "end_time": None,
             "total_checks": 0,
@@ -17,12 +29,14 @@ def start_session():
             "bad_posture_count": 0,
             "corrections": 0
         }
-        result = sessions_collection.insert_one(session)
+
+        result = get_sessions_collection().insert_one(session)
         return jsonify({
             "success": True,
             "session_id": str(result.inserted_id),
-            "message": "Session started successfully"
+            "message": "Session started"
         }), 201
+
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -30,24 +44,28 @@ def start_session():
 @session_bp.route("/end", methods=["POST"])
 def end_session():
     try:
-        data = request.json
+        data = request.get_json() or {}
         session_id = data.get("session_id")
         if not session_id:
-            return jsonify({"success": False, "error": "Session ID required"}), 400
+            return jsonify({"success": False, "error": "session_id required"}), 400
 
-        sessions_collection.update_one(
-            {"_id": session_id},
+        obj_id = to_obj_id(session_id)
+        if not obj_id:
+            return jsonify({"success": False, "error": "Invalid session_id"}), 400
+
+        result = get_sessions_collection().update_one(
+            {"_id": obj_id},
             {"$set": {
-                "end_time": datetime.utcnow(),
-                "final_stats": {
-                    "total_duration": data.get("total_duration"),
-                    "good_posture_percentage": data.get("good_posture_percentage"),
-                    "total_corrections": data.get("total_corrections")
-                }
+                "end_time": datetime.utcnow()
+                # final_stats optional — only if frontend sends it
             }}
         )
 
-        return jsonify({"success": True, "message": "Session ended successfully"}), 200
+        if result.matched_count == 0:
+            return jsonify({"success": False, "error": "Session not found"}), 404
+
+        return jsonify({"success": True, "message": "Session ended"}), 200
+
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -55,16 +73,37 @@ def end_session():
 @session_bp.route("/recent", methods=["GET"])
 def get_recent_sessions():
     try:
+        user_id = request.args.get("user_id", "user_001")
         limit = int(request.args.get("limit", 10))
-        sessions = list(sessions_collection.find().sort("start_time", -1).limit(limit))
 
+        sessions = list(
+            get_sessions_collection()
+            .find({"user_id": user_id})           # ← CRITICAL: filter by user
+            .sort("start_time", -1)
+            .limit(limit)
+        )
+
+        serialized = []
         for s in sessions:
-            s["_id"] = str(s["_id"])
-            if s.get("start_time"):
-                s["start_time"] = s["start_time"].isoformat()
-            if s.get("end_time"):
-                s["end_time"] = s["end_time"].isoformat()
+            serialized.append({
+                "session_id": str(s["_id"]),
+                "user_id": s.get("user_id"),
+                "start_time": s["start_time"].isoformat() if s.get("start_time") else None,
+                "end_time": s["end_time"].isoformat() if s.get("end_time") else None,
+                "duration_seconds": (
+                    (s["end_time"] - s["start_time"]).total_seconds()
+                    if s.get("end_time") and s.get("start_time") else None
+                ),
+                "total_checks": s.get("total_checks", 0),
+                "good_posture_count": s.get("good_posture_count", 0),
+                "bad_posture_count": s.get("bad_posture_count", 0),
+                "corrections": s.get("corrections", 0),
+                "score": round(
+                    s.get("good_posture_count", 0) / max(s.get("total_checks", 1), 1) * 100, 1
+                )
+            })
 
-        return jsonify({"success": True, "sessions": sessions}), 200
+        return jsonify({"success": True, "sessions": serialized}), 200
+
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
