@@ -32,6 +32,79 @@ let currentPostureData = {
   wasLastBad: false
 };
 
+// ============================================
+// NEW: 5-MINUTE AUDIO FEEDBACK SYSTEM
+// ============================================
+let feedbackTimer = null;
+let postureHistory = {
+  good: 0,
+  bad: 0,
+  totalChecks: 0
+};
+
+function startFeedbackTimer() {
+  if (feedbackTimer) {
+    clearInterval(feedbackTimer);
+  }
+  
+  postureHistory = { good: 0, bad: 0, totalChecks: 0 };
+  
+  // Send feedback every 5 minutes (300000 ms)
+  feedbackTimer = setInterval(() => {
+    sendPeriodicFeedback();
+  }, 10000); // 5 minutes
+  
+  console.log('5-minute feedback timer started');
+}
+
+function stopFeedbackTimer() {
+  if (feedbackTimer) {
+    clearInterval(feedbackTimer);
+    feedbackTimer = null;
+    console.log('5-minute feedback timer stopped');
+  }
+}
+
+function trackPosture(angle) {
+  postureHistory.totalChecks++;
+  
+  if (angle >= 80) {
+    postureHistory.good++;
+  } else {
+    postureHistory.bad++;
+  }
+}
+
+function sendPeriodicFeedback() {
+  if (postureHistory.totalChecks === 0) {
+    console.log('No posture data to send feedback');
+    return;
+  }
+  
+  const goodPercentage = (postureHistory.good / postureHistory.totalChecks) * 100;
+  
+  const feedbackData = {
+    type: 'PERIODIC_FEEDBACK',
+    stats: {
+      goodCount: postureHistory.good,
+      badCount: postureHistory.bad,
+      totalChecks: postureHistory.totalChecks,
+      goodPercentage: goodPercentage.toFixed(1)
+    }
+  };
+  
+  console.log('Sending 5-minute feedback:', feedbackData);
+  
+  // Send to background
+  chrome.runtime.sendMessage(feedbackData).catch((err) => {
+    console.error('Failed to send feedback:', err);
+  });
+  
+  // Reset for next interval
+  postureHistory = { good: 0, bad: 0, totalChecks: 0 };
+}
+// ============================================
+
 const ANGLE_THRESHOLD = 80;
 const DETECTION_INTERVAL = 200;
 
@@ -164,6 +237,7 @@ async function initCamera() {
       isRunning = true;
       startDetectionLoop();
       startKeepAlive();
+      startFeedbackTimer(); // NEW: Start 5-minute feedback timer
       setInterval(updateStats, 1000);
       await startBackendSession();
     };
@@ -256,7 +330,7 @@ function drawTriangle(result) {
   }
 }
 
-// ----- NEW: Detection loop using setInterval -----
+// Detection loop using setInterval
 function startDetectionLoop() {
   detectionIntervalId = setInterval(async () => {
     if (!isRunning || !detector) return;
@@ -268,7 +342,13 @@ function startDetectionLoop() {
         updatePostureDisplay(result);
         drawTriangle(result);
 
+        // Send angle to background for blur effect
         chrome.runtime.sendMessage({ type: "POSE_ANGLE_UPDATE", angle: result.totalAngle }).catch(()=>{});
+        
+        // NEW: Track posture for 5-minute feedback
+        if (result.isGood !== null) {
+          trackPosture(result.totalAngle);
+        }
       }
     } catch(err){console.error('Detection error:',err);}
   }, DETECTION_INTERVAL);
@@ -284,6 +364,7 @@ window.addEventListener('beforeunload', async () => {
   isRunning = false;
   stopKeepAlive();
   stopDetectionLoop();
+  stopFeedbackTimer(); // NEW: Stop feedback timer
   if (reportInterval) clearInterval(reportInterval);
   if (stream) stream.getTracks().forEach(t=>t.stop());
   await endBackendSession();

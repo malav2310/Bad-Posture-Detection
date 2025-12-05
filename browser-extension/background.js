@@ -75,11 +75,44 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  if(msg.type === "KEEP_ALIVE") {
+  // ============================================
+  // NEW: 5-MINUTE PERIODIC FEEDBACK
+  // ============================================
+// ------------------------------------
+if (msg.type === "PERIODIC_FEEDBACK") {
+  console.log("Received PERIODIC_FEEDBACK:", msg.stats);
+
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach((tab) => {
+      if (
+        tab.url &&
+        !tab.url.startsWith("chrome://") &&
+        !tab.url.startsWith("chrome-extension://")
+      ) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: "PLAY_AUDIO_FEEDBACK",
+          stats: msg.stats
+        }).catch(() => {});
+      }
+    });
+  });
+
+  sendResponse({ success: true });
+  return true;
+}
+
+  // ============================================
+
+  // KEEP ALIVE
+  if (msg.type === "KEEP_ALIVE") {
     console.log("Received KEEP_ALIVE from monitoring.js");
     sendResponse({ success: true });
     return true;
-  } 
+  }
+  
+  // If no handler matched, log it
+  console.warn("⚠️ No handler found for message type:", msg.type);
+  return true;
 });
 
 // Handle window close - update monitoring state

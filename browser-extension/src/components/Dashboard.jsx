@@ -1,7 +1,7 @@
 // src/components/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Activity, Clock, TrendingUp, CheckCircle } from 'lucide-react';
+import { Activity, Clock, TrendingUp, CheckCircle, Trophy } from 'lucide-react';
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
@@ -94,9 +94,18 @@ const Dashboard = () => {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Posture Monitor Dashboard</h1>
-          <p className="text-gray-600 mt-2">Track your posture health and monitor your progress</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Posture Monitor Dashboard</h1>
+            <p className="text-gray-600 mt-2">Track your posture health and monitor your progress</p>
+          </div>
+          <button
+            onClick={() => window.location.href = '/rewards.html'}
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+          >
+            <Trophy className="w-5 h-5" />
+            View Rewards
+          </button>
         </div>
 
         {/* Time Range Selector */}

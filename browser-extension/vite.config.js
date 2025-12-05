@@ -12,6 +12,7 @@ export default defineConfig({
         content: resolve(__dirname, 'content.js'),
         background: resolve(__dirname, 'background.js'),
         dashboard: resolve(__dirname, 'dashboard.html'),
+        rewards: resolve(__dirname, 'rewards.html'),
       },
       output: {
         entryFileNames: (chunk) => {

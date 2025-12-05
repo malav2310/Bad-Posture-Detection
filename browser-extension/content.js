@@ -114,13 +114,198 @@ function applyBlur(angle) {
   }
 }
 
+// ============================================
+// NEW: 5-MINUTE AUDIO FEEDBACK SYSTEM
+// ============================================
+
+// Audio feedback messages based on performance
+const feedbackMessages = {
+  excellent: [
+    "Excellent posture! You're doing great, keep it up!",
+    "Outstanding! Your posture has been excellent.",
+    "Fantastic work! Your spine will thank you.",
+    "Perfect posture maintenance! Well done!"
+  ],
+  good: [
+    "Good job! Your posture is mostly good.",
+    "Well done! Keep maintaining that good posture.",
+    "Nice work! You're on the right track.",
+    "Good posture! Just a few adjustments needed."
+  ],
+  fair: [
+    "Your posture needs some attention. Try to sit up straighter.",
+    "Remember to check your posture more often.",
+    "Let's improve that posture. Sit back and straighten up.",
+    "Time for a posture check. Adjust your position."
+  ],
+  poor: [
+    "Your posture needs immediate attention. Please sit up straight.",
+    "Alert! Your posture has been poor. Take a moment to adjust.",
+    "Important: Your posture needs correction. Straighten your back now.",
+    "Warning! Poor posture detected. Please correct your sitting position."
+  ]
+};
+
+function getFeedbackMessage(goodPercentage) {
+  let category;
+  
+  if (goodPercentage >= 90) {
+    category = 'excellent';
+  } else if (goodPercentage >= 70) {
+    category = 'good';
+  } else if (goodPercentage >= 50) {
+    category = 'fair';
+  } else {
+    category = 'poor';
+  }
+  
+  const messages = feedbackMessages[category];
+  const randomIndex = Math.floor(Math.random() * messages.length);
+  return messages[randomIndex];
+}
+
+function playAudioFeedback(stats) {
+  console.log('Playing audio feedback for stats:', stats);
+  
+  const message = getFeedbackMessage(parseFloat(stats.goodPercentage));
+  
+  // Use Web Speech API to speak the feedback
+  if ('speechSynthesis' in window) {
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(message);
+    
+    // Configure voice settings
+    utterance.rate = 0.9; // Slightly slower for clarity
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    
+    // Optional: Select a specific voice (prefer female voices as they're often clearer)
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(voice => 
+      voice.lang.startsWith('en') && (voice.name.includes('Female') || voice.name.includes('Google'))
+    ) || voices.find(voice => voice.lang.startsWith('en'));
+    
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+    
+    // Speak the message
+    window.speechSynthesis.speak(utterance);
+    
+    console.log('Audio feedback spoken:', message);
+    
+    // Show visual notification as well
+    showFeedbackNotification(message, stats);
+  } else {
+    console.warn('Speech synthesis not supported');
+    // Still show visual notification
+    showFeedbackNotification(message, stats);
+  }
+}
+
+function showFeedbackNotification(message, stats) {
+  // Remove any existing notification
+  const existingNotification = document.getElementById('posture-feedback-notification');
+  if (existingNotification) {
+    existingNotification.remove();
+  }
+  
+  // Create notification element
+  const notification = document.createElement('div');
+  notification.id = 'posture-feedback-notification';
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    z-index: 10000000;
+    max-width: 350px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    animation: slideInRight 0.3s ease-out;
+  `;
+  
+  notification.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+      <div style="font-size: 24px;">🎯</div>
+      <div style="font-weight: bold; font-size: 16px;">5-Minute Posture Check</div>
+    </div>
+    <div style="font-size: 14px; line-height: 1.5; margin-bottom: 12px;">
+      ${message}
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.9;">
+      <span>✅ Good: ${stats.goodCount}</span>
+      <span>❌ Bad: ${stats.badCount}</span>
+      <span>📊 Score: ${stats.goodPercentage}%</span>
+    </div>
+  `;
+  
+  // Add animation styles if not already added
+  if (!document.getElementById('posture-feedback-styles')) {
+    const style = document.createElement('style');
+    style.id = 'posture-feedback-styles';
+    style.textContent = `
+      @keyframes slideInRight {
+        from {
+          transform: translateX(400px);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      @keyframes slideOutRight {
+        from {
+          transform: translateX(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateX(400px);
+          opacity: 0;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  document.body.appendChild(notification);
+  
+  // Remove after 5 seconds
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.3s ease-in';
+    setTimeout(() => {
+      notification.remove();
+    }, 300);
+  }, 5000);
+}
+
+// Load voices (needed for speech synthesis)
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.onvoiceschanged = () => {
+    const voices = window.speechSynthesis.getVoices();
+    console.log('Available voices:', voices.length);
+  };
+}
+
+// ============================================
+
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Existing angle update handler
   if (message.type === 'POSE_ANGLE_UPDATE') {
     const angle = message.angle;
     applyBlur(angle);
     sendResponse({ success: true });
-  } else if (message.type === 'TOGGLE_BLUR') {
+  } 
+  
+  // Existing blur toggle handler
+  else if (message.type === 'TOGGLE_BLUR') {
     blurEnabled = message.enabled;
     
     // If blur is disabled, remove blur overlay
@@ -130,8 +315,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     
     sendResponse({ success: true, blurEnabled });
-  } else if (message.type === 'GET_BLUR_STATUS') {
+  } 
+  
+  // Existing blur status handler
+  else if (message.type === 'GET_BLUR_STATUS') {
     sendResponse({ blurEnabled });
+  }
+  
+  // NEW: Audio feedback handler
+  else if (message.type === 'PLAY_AUDIO_FEEDBACK') {
+    console.log('Received PLAY_AUDIO_FEEDBACK message');
+    playAudioFeedback(message.stats);
+    sendResponse({ success: true });
   }
   
   return true; // Keep message channel open for async response
@@ -145,3 +340,4 @@ createPostureIndicator();
 
 console.log('Posture Monitor Content Script Loaded');
 console.log('Blur enabled:', blurEnabled);
+console.log('Audio feedback enabled: true');
